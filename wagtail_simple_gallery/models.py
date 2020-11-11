@@ -71,7 +71,8 @@ class SimpleGalleryIndex(RoutablePageMixin, Page):
 
     def get_context(self, request):
         images = self.images
-        tags = self.tags
+        tags = self.get_gallery_tags_for_image_set(images)
+        #tags = self.tags
         context = super(SimpleGalleryIndex, self).get_context(request)
         page = request.GET.get('page')
         paginator = Paginator(images, self.images_per_page)
@@ -83,10 +84,27 @@ class SimpleGalleryIndex(RoutablePageMixin, Page):
             images = paginator.page(paginator.num_pages)
         context['gallery_images'] = images
         context['gallery_tags'] = tags
+
+        if request.GET.get('tag', None):
+            tag = request.GET.get('tag')
+            all_posts = BlogPage.objects.live().public().filter(tags__slug__in=[tag]).order_by('first_published_at')
+            try:
+                tag_query = Tag.objects.get(slug=tag)
+                context['tag_query'] = tag_query
+            except Tag.DoesNotExist:
+                context['tag_query_fail'] = 'Не найдено ни одного поста с такой меткой'
+
         return context
 
     def get_gallery_tags(self, tags=[]):
         images = get_gallery_images(self.collection.name, self, tags=tags)
+        for img in images:
+            tags += img.tags.all()
+        tags = sorted(set(tags))
+        return tags
+
+    def get_gallery_tags_for_image_set(self,images):
+        tags = []
         for img in images:
             tags += img.tags.all()
         tags = sorted(set(tags))
@@ -106,7 +124,7 @@ class SimpleGalleryIndex(RoutablePageMixin, Page):
             taglist.append(tag)
 
         images = get_gallery_images(self.collection.name, self, tags=taglist)
-        tags = self.get_gallery_tags(tags=taglist)
+        tags = self.get_gallery_tags_for_image_set(images)
         paginator = Paginator(images, self.images_per_page)
         page = request.GET.get('page')
         try:
